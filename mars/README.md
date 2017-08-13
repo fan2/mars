@@ -527,8 +527,8 @@ local_ipstack.h / local_ipstack.cc
 ```
 
 #### TcpClient/TcpServer
-observer_：MTcpServer
-
+- event_：MTcpEvent  
+- observer_：MTcpServer  
 
 ```CPP
 TcpClient::TcpClient(const char* _ip, uint16_t _port, MTcpEvent& _event, int _timeout)
@@ -551,6 +551,9 @@ TcpServer::TcpServer(const char* _ip, uint16_t _port, MTcpServer& _observer, int
 ```
 
 #### UdpClient/UdpServer
+- event_：IAsyncUdpClientEvent  
+- event_：IAsyncUdpServerEvent  
+
 ```CPP
 UdpClient::UdpClient(const std::string& _ip, int _port, IAsyncUdpClientEvent* _event)
 :fd_socket_(INVALID_SOCKET)
