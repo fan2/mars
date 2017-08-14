@@ -23,14 +23,14 @@ mars common library walkthrough
 - GetProxyInfo；DNS::GetHostByName，__Coro_Poll；  
 - Alarm、ShortLink/ShortLinkTaskManager、TcpClient/TcpServer、UdpClient/UdpServer；  
 
-#### class ThreadUtil
+#### ThreadUtil
 1. `yield`：sched_yield()  
 2. `sleep`/`usleep`  
 3. `currentthreadid`：pthread_self() // mach_thread_self()?   
 4. `isruning`：pthread_kill(_id, 0)  
 5. `join`：pthread_join(_id, 0);  
 
-#### class Thread
+#### Thread
 ```obj-c
 class Thread {
 private:
@@ -43,7 +43,7 @@ private:
 };
 ```
 
-#### class RunnableReference
+#### RunnableReference
 核心封装了 `Runnable* target` 及所属线程状态。
 Reference 支持引用计数 `AddRef`/`RemoveRef`，当 `RemoveRef` 至 `count--==0` 时，执行 `delete this` 自杀。相当于实现了 Runnable 类型的智能指针。
 
@@ -397,7 +397,7 @@ MessagePost_t PostMessage(const MessageHandler_t& _handlerid, const Message& _me
 }
 ```
 
-###### InstallAsyncHandler-InstallMessageHandler
+##### InstallAsyncHandler-InstallMessageHandler
 ```CPP
 //AsyncInvoke
 MessageHandler_t InstallAsyncHandler(const MessageQueue_t& id);
@@ -469,7 +469,7 @@ return MessageQueue::WaitInvoke(func, AYNC_HANDLER);\
 ```
 
 #### RunLoop
-##### class RunLoop
+##### RunLoop
 ```CPP
 class RunLoop {
 
@@ -494,7 +494,36 @@ void MessageQueueCreater::__ThreadRunloop() {
 
 在 **`RunLoop::Run()`** 中轮询 lst_message 和 lst_handler。
 
-##### class RunloopCond
+```CPP
+void RunLoop::Run() {
+    MessageQueue_t id = CurrentThreadMessageQueue();
+
+    while (true) {
+        MessageQueueContent& content = sg_messagequeue_map[id];
+
+        MessageWrapper* messagewrapper = NULL;
+
+        // 找到可运行的异步任务 Message
+        foreach (content.lst_message) {
+            messagewrapper = *it;
+        }
+
+        // 找到对应的 MessageHandler，默认为 __AsyncInvokeHandler
+        std::list<HandlerWrapper> fit_handler;
+        foreach (content.lst_handler) {
+            fit_handler.push_back(**it);
+        }
+
+        // 执行 handler(_message.body1)
+        foreach (fit_handler) {
+            (*it).handler(messagewrapper->postid, messagewrapper->message);
+        }
+    }
+}
+
+```
+
+##### RunloopCond
 
 ### socket
 #### unix_socket
@@ -550,6 +579,8 @@ TcpServer::TcpServer(const char* _ip, uint16_t _port, MTcpServer& _observer, int
 }
 ```
 
+回调机制？
+
 #### UdpClient/UdpServer
 - event_：IAsyncUdpClientEvent  
 - event_：IAsyncUdpServerEvent  
@@ -577,6 +608,8 @@ UdpServer::UdpServer(int _port, IAsyncUdpServerEvent* _event)
     thread_->start();
 }
 ```
+
+回调机制？
 
 ### coroutine(coro_socket)
 
