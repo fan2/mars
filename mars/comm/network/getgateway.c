@@ -47,7 +47,7 @@
 #define USE_SYSCTL_NET_ROUTE
 
 #include <TargetConditionals.h>
-#if !TARGET_OS_SIMULATOR
+#if TARGET_OS_IOS
 #undef __ROUTE_HEADER_FILE__
 #define __ROUTE_HEADER_FILE__  "comm/objc/route.h"
 #endif
