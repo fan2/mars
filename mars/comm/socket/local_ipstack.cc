@@ -30,6 +30,8 @@
 #include "platform_comm.h"
 #endif
 
+#include "comm/network/local_routetable.h"
+
 
 typedef union sockaddr_union {
     struct sockaddr     generic;
@@ -245,6 +247,7 @@ static void __local_info(std::string& _log);
 
 TLocalIPStack local_ipstack_detect_log(std::string& _log) {
     __local_info(_log);
+    _log += get_local_route_table();
    return __local_ipstack_detect(_log);
 }
 
@@ -270,7 +273,7 @@ static void __local_info(std::string& _log) {
     }
     
     std::vector<socket_address> dnssvraddrs;
-    getdnssvraddrs(dnssvraddrs);
+    mars::comm::getdnssvraddrs(dnssvraddrs);
     if (!dnssvraddrs.empty()) {
         for (size_t i = 0; i < dnssvraddrs.size(); ++i) {
             if (AF_INET == dnssvraddrs[i].address().sa_family) {

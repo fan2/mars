@@ -57,7 +57,7 @@ void str_split(char _spliter, std::string _pingresult, std::vector<std::string>&
     int findpos = 0;
 
     while ((unsigned int)findpos < _pingresult.length()) {
-    	findpos = _pingresult.find_first_of(_spliter, find_begpos);
+        findpos = _pingresult.find_first_of(_spliter, find_begpos);
         _vec_pingres.push_back(std::string(_pingresult, find_begpos, findpos - find_begpos));
         find_begpos = findpos + 1;
     }
@@ -70,7 +70,7 @@ int PingQuery::RunPingQuery(int _querycount, int interval/*S*/, int timeout/*S*/
     xassert2(timeout >= 0, "timeout should be more than 0");
 
     if (_querycount == 0)
-    	_querycount = DEFAULT_PING_COUNT;
+        _querycount = DEFAULT_PING_COUNT;
 
     if (interval == 0)
         interval = DEFAULT_PING_INTERVAL;
@@ -162,7 +162,7 @@ int PingQuery::RunPingQuery(int _querycount, int interval/*S*/, int timeout/*S*/
     GetPingStatus(pingStatusTemp);
 
     if (0 == pingStatusTemp.avgrtt && 0 == pingStatusTemp.maxrtt) {
-        xinfo2(TSF"remote host is not available");
+        xinfo2(TSF"remote host is not available, pingresult_:%_", pingresult_);
         return -1;
     }
 
@@ -499,6 +499,7 @@ int PingQuery::__prepareSendAddr(const char* _dest) {
 
     if (ai->ai_family != AF_INET) {
         xinfo2(TSF"unknown address family %0\n", ai->ai_family);
+        freeaddrinfo(ai);
         return -1;
     }
 
@@ -632,8 +633,9 @@ void PingQuery::__onAlarm() {
 int PingQuery::__runReadWrite(int& _errcode) {
     unsigned long timeout_point = timeout_ * 1000 + gettickcount();
     unsigned long send_next = 0;
-
-    while (readcount_ > 0) {
+    
+    int sel_timeout_cnt = 0;
+    while (readcount_ > 0 && sel_timeout_cnt < 10) {
         bool    should_send = false;
 
         if (send_next <= gettickcount() && sendcount_ > 0) {
@@ -663,6 +665,12 @@ int PingQuery::__runReadWrite(int& _errcode) {
             _errcode = sel.Errno();
             return -1;
         }
+        
+        if (sel.IsBreak()){
+            xinfo2(TSF"user breaked");
+            _errcode = EINTR;
+            return -1;
+        }
 
         if (sel.IsException()) {
             xerror2(TSF"socketselect exception");
@@ -672,8 +680,12 @@ int PingQuery::__runReadWrite(int& _errcode) {
 
         if (sel.Exception_FD_ISSET(sockfd_)) {
             _errcode = socket_error(sockfd_);
-
             return -1;
+        }
+        
+        if (0 == retsel){
+            _errcode = ETIMEDOUT;
+            ++sel_timeout_cnt;
         }
 
         if (sel.Write_FD_ISSET(sockfd_) && should_send) {
@@ -760,7 +772,9 @@ int PingQuery::RunPingQuery(int _querycount, int _interval/*S*/, int _timeout/*S
 int PingQuery::GetPingStatus(struct PingStatus& _ping_status) {
     clearPingStatus(_ping_status);
     int size = (int)vecrtts_.size();
-    const char* pingIP = socket_address(&sendaddr_).ip();
+
+    socket_address sock_addr(&sendaddr_);
+    const char* pingIP = sock_addr.ip();
     xdebug2(TSF"pingIP=%0", pingIP);
 
     if (pingIP != NULL) {

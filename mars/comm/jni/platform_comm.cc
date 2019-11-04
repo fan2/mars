@@ -130,11 +130,11 @@ DEFINE_FIND_STATIC_METHOD(KPlatformCommC2Java_getNetInfo, KPlatformCommC2Java, "
 int getNetInfo() {
 	xverbose_function();
 
-    if (g_NetInfo != 0)
-        return g_NetInfo;
+    // if (g_NetInfo != 0 && g_NetInfo != kNoNet)
+    //     return g_NetInfo;
     
-    if (coroutine::isCoroutine())
-        return coroutine::MessageInvoke(&getNetInfo);
+    // if (coroutine::isCoroutine())
+    //     return coroutine::MessageInvoke(&getNetInfo);
 
     VarCache* cacheInstance = VarCache::Singleton();
     ScopeJEnv scopeJEnv(cacheInstance->GetJvm());
@@ -237,16 +237,16 @@ bool getCurRadioAccessNetworkInfo(RadioAccessNetworkInfo& _raninfo) {
 
 DEFINE_FIND_STATIC_METHOD(KPlatformCommC2Java_getCurWifiInfo, KPlatformCommC2Java,
                           "getCurWifiInfo", "()Lcom/tencent/mars/comm/PlatformComm$WifiInfo;")
-bool getCurWifiInfo(WifiInfo& wifiInfo) {
+bool getCurWifiInfo(WifiInfo& wifiInfo, bool _force_refresh) {
     xverbose_function();
 
-    if (!g_wifi_info.ssid.empty()) {
+    if (!_force_refresh && !g_wifi_info.ssid.empty()) {
     	wifiInfo = g_wifi_info;
     	return true;
     }
 
     if (coroutine::isCoroutine())
-        return coroutine::MessageInvoke(boost::bind(&getCurWifiInfo, boost::ref(wifiInfo)));
+        return coroutine::MessageInvoke(boost::bind(&getCurWifiInfo, boost::ref(wifiInfo), _force_refresh));
                                         
     VarCache* cacheInstance = VarCache::Singleton();
     ScopeJEnv scopeJEnv(cacheInstance->GetJvm());

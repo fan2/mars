@@ -46,7 +46,7 @@ class MComplexConnect {
     virtual bool OnShouldVerify(unsigned int _index, const socket_address& _addr) { return false;}
     virtual bool OnVerifySend(unsigned int _index, const socket_address& _addr, SOCKET _socket, AutoBuffer& _buffer_send) { return false;}
     virtual bool OnVerifyRecv(unsigned int _index, const socket_address& _addr, SOCKET _socket, const AutoBuffer& _buffer_recv) { return false;}
-    virtual void OnVerifyTimeout(int _usedtime) {}
+    virtual void OnVerifyTimeout(unsigned int _index, const socket_address& _addr, SOCKET _socket, int _timeout) {}
 
     virtual void OnFinished(unsigned int _index, const socket_address& _addr, SOCKET _socket,
                             int _error, int _conn_rtt, int _conn_totalcost, int _complex_totalcost) {}
@@ -69,6 +69,7 @@ class ComplexConnect {
     unsigned int IndexRtt() const { return index_conn_rtt_;}
     unsigned int IndexTotalCost() const { return index_conn_totalcost_;}
     unsigned int TotalCost() const { return totalcost_;}
+    bool IsInterrupted() const{ return is_interrupted_;};
 
   private:
     int __ConnectTime(unsigned int _index) const;
@@ -91,6 +92,7 @@ class ComplexConnect {
     int index_conn_rtt_;
     int index_conn_totalcost_;
     int totalcost_;
+    bool is_interrupted_;
 };
 
 #ifdef COMPLEX_CONNECT_NAMESPACE

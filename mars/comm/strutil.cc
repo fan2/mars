@@ -25,6 +25,7 @@
 #include <stdlib.h>
 #include <ctype.h>
 #include <algorithm>
+#include <locale>
 
 #include "comm/xlogger/xlogger.h"
 
@@ -151,14 +152,14 @@ std::string& URLEncode(const std::string& _url, std::string& _encode_url) {
 #define TOLOWER(T) T& ToLower(T& str)\
 {\
     T& t = str;\
-	std::transform(t.begin(), t.end(), t.begin(), ::tolower);\
+    std::transform(t.begin(), t.end(), t.begin(), ::tolower);\
     return t;\
 }
 
 #define TOUPPER(T) T& ToUpper(T& str)\
 {\
     T& t = str;\
-	std::transform(t.begin(), t.end(), t.begin(), ::toupper);\
+    std::transform(t.begin(), t.end(), t.begin(), ::toupper);\
     return t;\
 }
 
@@ -218,21 +219,42 @@ ENDSWITH(std::wstring)
 SPLITTOKEN(std::string)
 SPLITTOKEN(std::wstring)
 
-std::string Hex2Str(const char* _str, unsigned int _len) {
-    std::string outstr="";
-    for(unsigned int i = 0; i< _len;i++) {
-        char tmp[8];
-        memset(tmp,0,sizeof(tmp));
-        snprintf(tmp,sizeof(tmp)-1,"%02x",(unsigned char)_str[i]);
-        std::string tmpstr = tmp;
-        outstr = outstr+tmpstr;
+#ifdef WIN32
+#include <Windows.h>
+std::wstring String2WString(const std::string& _src, unsigned int _cp) {
+    const int len = static_cast<int>(_src.length());
+    std::wstring enc;
+    const int req = MultiByteToWideChar(_cp, 0, _src.c_str(), len, NULL, 0);
+    if (req > 0) {
+        enc.resize(static_cast<size_t>(req));
+        MultiByteToWideChar(_cp, 0, _src.c_str(), len, &enc[0], req);
+    }
+    return enc;
+}
 
+std::wstring UTF8String2Wstring(const std::string& _src) {
+    return String2WString(_src, CP_UTF8);
+}
+#endif
+std::string Hex2Str(const char* _str, unsigned int _len) {
+    std::string outstr = "";
+    static const char* HEX = "0123456789abcdef";
+    const uint8_t* input = (const uint8_t*)_str;
+    uint8_t t, a, b;
+    for (unsigned int i = 0; i < _len; i++) {
+        t = input[i];
+        // byte a = t / 16;
+        a = t >> 4;
+        // byte b = t % 16;
+        b = t & 0x0f;
+        outstr.append(1, HEX[a]);
+        outstr.append(1, HEX[b]);
     }
     return outstr;
 }
 
 std::string Str2Hex(const char* _str, unsigned int _len) {
-    char outbuffer[64];
+    char outbuffer[256];
     
     unsigned int outoffset = 0;
     const char * ptr = _str;
@@ -244,7 +266,7 @@ std::string Str2Hex(const char* _str, unsigned int _len) {
     for(unsigned int i = 0; i< length;i++) {
         char tmp[4];
         
-        memset(tmp,0,sizeof(tmp));
+        memset(tmp, 0, sizeof(tmp));
         tmp[0] = ptr[i*2];
         tmp[1] = ptr[i*2+1];
         char *p = NULL;
@@ -258,14 +280,69 @@ std::string Str2Hex(const char* _str, unsigned int _len) {
     
 
 std::string ReplaceChar(const char* const input_str, char be_replaced, char replace_with) {
-	std::string output_str(input_str);
-	size_t len = output_str.size();
-	xassert2(len<16);
-	for(size_t i=0; i<len; ++i) {
-		if (be_replaced == output_str[i]) {
-			output_str[i] = replace_with;
-		}
-	}
-	return output_str;
+    std::string output_str(input_str);
+    size_t len = output_str.size();
+    xassert2(len<16*1024, TSF"input_str:%_", input_str);
+    for(size_t i=0; i<len; ++i) {
+        if (be_replaced == output_str[i]) {
+            output_str[i] = replace_with;
+        }
+    }
+    return output_str;
 }
+std::string GetFileNameFromPath(const char* _path) {
+    if (NULL == _path) return "";
+    
+    const char* pos = strrchr(_path, '\\');
+    
+    if (NULL == pos) {
+        pos = strrchr(_path, '/');
+    }
+    
+    if (NULL == pos || '\0' == *(pos + 1)) {
+        return _path;
+    } else {
+        return pos + 1;
+    }
+}
+    
+template<typename charT>
+struct my_equal {
+    my_equal(const std::locale& loc) : loc_(loc) {}
+    bool operator()(charT ch1, charT ch2) {
+        return std::toupper(ch1, loc_) == std::toupper(ch2, loc_);
+    }
+private:
+    const std::locale& loc_;
+};
+
+// find substring (case insensitive)
+size_t ci_find_substr(const std::string& str, const std::string& sub, size_t pos){
+    const std::locale& loc = std::locale();
+    typename std::string::const_iterator it = std::search(str.begin() + pos, str.end(),
+                                                sub.begin(), sub.end(), my_equal<typename std::string::value_type>(loc));
+    
+    if (it != str.end()) return it - str.begin();
+    else return std::string::npos;  // not found
+}
+    
+std::string MD5DigestToBase16(const uint8_t digest[16]){
+    return DigestToBase16(&digest[0], 16);
+}
+
+std::string DigestToBase16(const uint8_t *digest, size_t length){
+    assert(length % 2 == 0);
+    static char const zEncode[] = "0123456789abcdef";
+    
+    std::string ret;
+    ret.resize(length * 2);
+    
+    for (size_t i = 0, j = 0; i < length; i++, j += 2) {
+        uint8_t a = digest[i];
+        ret[j] = zEncode[(a >> 4) & 0xf];
+        ret[j + 1] = zEncode[a & 0xf];
+    }
+    return ret;
+}
+
 }

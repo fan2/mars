@@ -64,6 +64,9 @@ class NetSource {
     };
 
   public:
+    boost::function<bool ()> fun_need_use_IPv6_;
+
+  public:
     //set longlink host and ports
     static void SetLongLink(const std::vector<std::string>& _hosts, const std::vector<uint16_t>& _ports, const std::string& _debugip);
     //set shortlink port
@@ -96,6 +99,8 @@ class NetSource {
     // for short link
     bool GetShortLinkItems(const std::vector<std::string>& _hostlist, std::vector<IPPortItem>& _ipport_items, DnsUtil& _dns_util);
 
+    void AddServerBan(const std::string& _ip);
+    
     void ClearCache();
 
     void ReportLongIP(bool _is_success, const std::string& _ip, uint16_t _port);

@@ -47,9 +47,9 @@ struct dnsinfo {
 };
 
 static std::string DNSInfoToString(const struct dnsinfo& _info) {
-	XMessage msg;
-	msg(TSF"info:%_, threadid:%_, dns:%_, host_name:%_, status:%_", &_info, _info.threadid, _info.dns, _info.host_name, _info.status);
-	return msg.Message();
+    XMessage msg;
+    msg(TSF"info:%_, threadid:%_, dns:%_, host_name:%_, status:%_", &_info, _info.threadid, _info.dns, _info.host_name, _info.status);
+    return msg.Message();
 }
 static std::vector<dnsinfo> sg_dnsinfo_vec;
 static Condition sg_condition;
@@ -77,8 +77,17 @@ static void __GetIP() {
 
     if (NULL == dnsfunc) {
         
+        //
+        xgroup2_define(log_group);
+        std::vector<socket_address> dnssvraddrs;
+        mars::comm::getdnssvraddrs(dnssvraddrs);
+        xinfo2("dns server:") >> log_group;
+        for (std::vector<socket_address>::iterator iter = dnssvraddrs.begin(); iter != dnssvraddrs.end(); ++iter) {
+            xinfo2(TSF"%_:%_ ", iter->ip(), iter->port()) >> log_group;
+        }
+        
+        //
         struct addrinfo hints, *single, *result;
-
         memset(&hints, 0, sizeof(hints));
         hints.ai_family = PF_INET;
         hints.ai_socktype = SOCK_STREAM;
@@ -103,7 +112,7 @@ static void __GetIP() {
         }
 
         if (error != 0) {
-            xwarn2(TSF"error, error:%_, hostname:%_, ipstack:%_", error, host_name.c_str(), ipstack);
+            xwarn2(TSF"error, error:%_/%_, hostname:%_, ipstack:%_", error, strerror(error), host_name.c_str(), ipstack);
 
             if (iter != sg_dnsinfo_vec.end()) iter->status = kGetIPFail;
 
@@ -128,7 +137,8 @@ static void __GetIP() {
 
 
 //                convertAddr.s_addr = addr_in->sin_addr.s_addr;
-    			const char* ip = socket_address(single->ai_addr).ip();
+                socket_address sock_addr(single->ai_addr);
+                const char* ip = sock_addr.ip();
 
                 if (!socket_address(ip, 0).valid_server_address(false, true)) {
                     xerror2(TSF"ip is invalid, ip:%0", ip);
@@ -137,16 +147,12 @@ static void __GetIP() {
 
                 iter->result.push_back(ip);
             }
-
-            if (iter->result.empty()) {
-                xgroup2_define(log_group);
-                std::vector<socket_address> dnssvraddrs;
-                getdnssvraddrs(dnssvraddrs);
-                
-                xinfo2("dns server:") >> log_group;
-                for (std::vector<socket_address>::iterator iter = dnssvraddrs.begin(); iter != dnssvraddrs.end(); ++iter) {
-                    xinfo2(TSF"%_:%_ ", iter->ip(), iter->port()) >> log_group;
-                }
+            
+            //
+            xgroup2_define(ip_group);
+            xinfo2(TSF"host %_ resolved iplist: ", host_name) >> ip_group;
+            for(auto ip : iter->result){
+                xinfo2(TSF"%_,", ip) >> ip_group;
             }
             
             freeaddrinfo(result);
@@ -239,24 +245,24 @@ bool DNS::GetHostByName(const std::string& _host_name, std::vector<std::string>&
             }
 
             if (kGetIPSuc == it->status) {
-            	if (_host_name==it->host_name) {
-					ips = it->result;
+                if (_host_name==it->host_name) {
+                    ips = it->result;
 
-					if (_breaker) _breaker->dnsstatus = NULL;
+                    if (_breaker) _breaker->dnsstatus = NULL;
 
-					sg_dnsinfo_vec.erase(it);
-					return true;
-            	} else {
+                    sg_dnsinfo_vec.erase(it);
+                    return true;
+                } else {
                     std::vector<dnsinfo>::iterator iter = sg_dnsinfo_vec.begin();
                     int i = 0;
                     for (; iter != sg_dnsinfo_vec.end(); ++iter) {
-                    	xerror2(TSF"sg_info_vec[%_]:%_", i++, DNSInfoToString(*iter));
+                        xerror2(TSF"sg_info_vec[%_]:%_", i++, DNSInfoToString(*iter));
                     }
                     if (monitor_func_)
-                    	monitor_func_(kDNSThreadIDError);
-            		xassert2(false, TSF"_host_name:%_, it->host_name:%_", _host_name, it->host_name);
-            		return false;
-            	}
+                        monitor_func_(kDNSThreadIDError);
+                    xassert2(false, TSF"_host_name:%_, it->host_name:%_", _host_name, it->host_name);
+                    return false;
+                }
             }
 
             if (kGetIPTimeout == it->status || kGetIPCancel == it->status || kGetIPFail == it->status) {

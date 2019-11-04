@@ -14,9 +14,7 @@
 #include "comm/xlogger/xloggerbase.h"
 #include "comm/compiler_util.h"
 
-#ifdef ANDROID
-#include "comm/android/callstack.h"
-#endif
+
 
 #ifndef XLOGGER_TAG
 #define XLOGGER_TAG ""
@@ -31,15 +29,11 @@ void __assert_rtn(const char *, const char *, int, const char *) __dead2;
 #define snprintf _snprintf
 #endif
 
-#ifdef DEBUG
-static int sg_enable_assert = 1;
+#ifndef NDEBUG
+#define IS_ASSERT_ENABLE() 1
 #else
-static int sg_enable_assert = 0;
+#define IS_ASSERT_ENABLE() 0
 #endif
-
-void ENABLE_ASSERT() { sg_enable_assert = 1;}
-void DISABLE_ASSERT() { sg_enable_assert = 0; }
-int IS_ASSERT_ENABLE() { return sg_enable_assert;}
 
 EXPORT_FUNC void __ASSERT(const char * _pfile, int _line, const char * _pfunc, const char * _pexpression) {
     XLoggerInfo info= {0};
@@ -48,9 +42,9 @@ EXPORT_FUNC void __ASSERT(const char * _pfile, int _line, const char * _pfunc, c
 
     offset += snprintf(assertlog, sizeof(assertlog), "[ASSERT(%s)]", _pexpression);
 
-#ifdef ANDROID
-    android_callstack(assertlog+offset, sizeof(assertlog)-offset);
-#endif
+//#ifdef ANDROID
+//    android_callstack(assertlog+offset, sizeof(assertlog)-offset);
+//#endif
 
     info.level = kLevelFatal;
     info.tag = XLOGGER_TAG;
@@ -84,9 +78,9 @@ void __ASSERTV2(const char * _pfile, int _line, const char * _pfunc, const char 
     offset += snprintf(assertlog, sizeof(assertlog), "[ASSERT(%s)]", _pexpression);
     offset += vsnprintf(assertlog+offset, sizeof(assertlog)-offset, _format, _list);
 
-#ifdef ANDROID
-    android_callstack(assertlog+offset, sizeof(assertlog)-offset);
-#endif
+//#ifdef ANDROID
+//    android_callstack(assertlog+offset, sizeof(assertlog)-offset);
+//#endif
 
     info.level = kLevelFatal;
     info.tag = XLOGGER_TAG;

@@ -23,15 +23,16 @@
 
 #include <list>
 #include <stdint.h>
+#include <map>
 
 #include "boost/function.hpp"
 
 #include "mars/comm/messagequeue/message_queue.h"
-#include "mars/comm/alarm.h"
 #include "mars/stn/stn.h"
 #include "mars/stn/task_profile.h"
 
 #include "shortlink.h"
+#include "socket_pool.h"
 
 class AutoBuffer;
 
@@ -52,6 +53,9 @@ class ShortLinkTaskManager {
     boost::function<void (int _status_code)> fun_shortlink_response_;
     boost::function<void (ErrCmdType _err_type, int _err_code, int _fail_handle, uint32_t _src_taskid)> fun_notify_retry_all_tasks;
 
+    static boost::function<void (std::vector<std::string>& _host_list)> get_real_host_;
+    static boost::function<void (const int _error_type, const int _error_code, const int _use_ip_index)> task_connection_detail_;
+
   public:
     ShortLinkTaskManager(mars::stn::NetSource& _netsource, DynamicTimeout& _dynamictimeout, MessageQueue::MessageQueue_t _messagequeueid);
     virtual ~ShortLinkTaskManager();
@@ -65,6 +69,7 @@ class ShortLinkTaskManager {
 
     unsigned int GetTasksContinuousFailCount();
 
+    ConnectProfile GetConnectProfile(uint32_t _taskid) const;
   private:
     void __RunLoop();
     void __RunOnTimeout();
@@ -80,6 +85,7 @@ class ShortLinkTaskManager {
     std::list<TaskProfile>::iterator __LocateBySeq(intptr_t _running_id);
 
     void __DeleteShortLink(intptr_t& _running_id);
+    SOCKET __OnGetCacheSocket(const IPPortItem& _address);
 
   private:
     MessageQueue::ScopeRegister     asyncreg_;
@@ -93,9 +99,10 @@ class ShortLinkTaskManager {
 #ifdef ANDROID
     WakeUpLock*                     wakeup_lock_;
 #endif
+    SocketPool socket_pool_;
 };
         
-    }
+}
 }
 
 

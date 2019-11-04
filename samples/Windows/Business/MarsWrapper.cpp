@@ -24,6 +24,8 @@
 #include "GetConvListCGITask.h"
 #include "proto/generate/main.pb.h"
 #include "proto/generate/messagepush.pb.h"
+#include "mars/comm/xlogger/xloggerbase.h"
+#include "mars/log/appender.h"
 
 static const char* g_host = "marsopen.cn";
 
@@ -36,7 +38,21 @@ MarsWrapper& MarsWrapper::Instance()
 MarsWrapper::MarsWrapper()
 	: chat_msg_observer_(nullptr)
 {
-	
+	std::string logPath = "Log"; //use your log path
+	std::string pubKey = ""; //use you pubkey for log encrypt
+
+#if _DEBUG
+	xlogger_SetLevel(kLevelDebug);
+	appender_set_console_log(true);
+	extern std::function<void(char* _log)> g_console_log_fun;
+	g_console_log_fun = [](char* _log) {
+		::OutputDebugStringA(_log);
+	};
+#else
+	xlogger_SetLevel(kLevelInfo);
+	appender_set_console_log(false);
+#endif
+	appender_open(kAppednerAsync, logPath.c_str(), "Sample", pubKey.c_str());
 }
 
 void MarsWrapper::OnPush(uint64_t _channel_id, uint32_t _cmdid, uint32_t _taskid, const AutoBuffer& _body, const AutoBuffer& _extend)

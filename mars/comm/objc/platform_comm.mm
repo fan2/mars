@@ -4,6 +4,8 @@
  */
 #include "comm/platform_comm.h"
 
+#import <Foundation/Foundation.h>
+
 #include "comm/xlogger/xlogger.h"
 #include "comm/xlogger/loginfo_extract.h"
 #import "comm/objc/scope_autoreleasepool.h"
@@ -31,6 +33,7 @@
 #include "comm/objc/objc_timer.h"
 #import "comm/objc/Reachability.h"
 
+#include "comm/thread/mutex.h"
 #include "comm/thread/lock.h"
 #include "comm/network/getifaddrs.h"
 
@@ -58,8 +61,16 @@ static MarsNetworkStatus __GetNetworkStatus()
 #endif
 }
 
+static WifiInfo sg_wifiinfo;
+static Mutex sg_wifiinfo_mutex;
+
 void FlushReachability() {
-   [MarsReachability getCacheReachabilityStatus:YES];
+#if !TARGET_OS_WATCH
+    [MarsReachability getCacheReachabilityStatus:YES];
+    ScopedLock lock(sg_wifiinfo_mutex);
+    sg_wifiinfo.ssid.clear();
+    sg_wifiinfo.bssid.clear();
+#endif
 }
 
 float publiccomponent_GetSystemVersion() {
@@ -206,7 +217,7 @@ bool isNetworkConnected()
         case ReachableViaWiFi:
             return true;
         case ReachableViaWWAN:
-return true;
+            return true;
         default:
             return false;
     }
@@ -216,7 +227,22 @@ return true;
 #define IWATCH_NET_INFO "IWATCH"
 #define USE_WIRED  "wired"
 
-bool getCurWifiInfo(WifiInfo& wifiInfo)
+static bool __WiFiInfoIsValid(const WifiInfo& _wifi_info) {
+    // CNCopyCurrentNetworkInfo is now only available to your app in three cases:
+    // * Apps with permission to access location
+    // * Your app is the currently enabled VPN app
+    // * Your app configured the WiFi network the device is currently using via NEHotspotConfiguration
+    // otherwise return nil.
+    // But if you use 'NEHotspotConfiguration' and without permission to access location
+    // Instead, the information returned by default will be:
+    // * SSID: “Wi-Fi” or “WLAN” (“WLAN" will be returned for the China SKU)
+    // * BSSID: "00:00:00:00:00:00" 
+    static const std::string kConstSSID1 = "Wi-Fi";
+    static const std::string kConstSSID2 = "WLAN";
+    return kConstSSID1 != _wifi_info.ssid && kConstSSID2 != _wifi_info.ssid; 
+}
+
+bool getCurWifiInfo(WifiInfo& wifiInfo, bool _force_refresh)
 {
     SCOPE_POOL();
     
@@ -226,20 +252,29 @@ bool getCurWifiInfo(WifiInfo& wifiInfo)
     return true;
 #elif !TARGET_OS_IPHONE
     
-    static CWInterface* info = nil; //CWInterface can reused
+    static Mutex mutex;
+    ScopedLock lock(mutex);
     
-    if (nil == info) {
-        if (__GetSystemVersion() < 10.10){
-            info = [CWInterface interface];
-        }else{
-            CWWiFiClient* wificlient = [CWWiFiClient sharedWiFiClient];
-            if (nil != wificlient) info = [wificlient interface];
-        }
+    static float version = 0.0;
+    
+    CWInterface* info = nil;
+    
+    if (version < 0.1) {
+        version = __GetSystemVersion();
+    }
+    
+    if (version < 10.10){
+        static CWInterface* s_info = [[CWInterface interface] retain];
+        info = s_info;
+    }else{
+        CWWiFiClient* wificlient = [CWWiFiClient sharedWiFiClient];
+        if (nil != wificlient) info = [wificlient interface];
     }
 
     if (nil == info) return false;
-    if (info.ssid) {
-        wifiInfo.ssid = [info.ssid UTF8String];
+    if (info.ssid != nil) {
+        const char* ssid = [info.ssid UTF8String];
+        if(NULL != ssid) wifiInfo.ssid.assign(ssid, strnlen(ssid, 32));
         //wifiInfo.bssid = [info.bssid UTF8String];
     } else {
         wifiInfo.ssid = USE_WIRED;
@@ -252,6 +287,14 @@ bool getCurWifiInfo(WifiInfo& wifiInfo)
     wifiInfo.bssid = IWATCH_NET_INFO;
     return true;
 #else
+    wifiInfo.ssid = "WiFi";
+    wifiInfo.bssid = "WiFi";
+    ScopedLock lock(sg_wifiinfo_mutex);
+    if (!sg_wifiinfo.ssid.empty() && !_force_refresh) {
+        wifiInfo = sg_wifiinfo;
+        return __WiFiInfoIsValid(wifiInfo);
+    }
+    lock.unlock();
     NSArray *ifs = nil;
     @synchronized (@"CNCopySupportedInterfaces") {
         ifs = (id)CNCopySupportedInterfaces();
@@ -287,8 +330,21 @@ bool getCurWifiInfo(WifiInfo& wifiInfo)
     }
     CFRelease(info);
     CFRelease(ifs);
-    
-    return true;
+
+    // CNCopyCurrentNetworkInfo is now only available to your app in three cases:
+    // * Apps with permission to access location
+    // * Your app is the currently enabled VPN app
+    // * Your app configured the WiFi network the device is currently using via NEHotspotConfiguration
+    // otherwise return nil.
+    // But if you use 'NEHotspotConfiguration' and without permission to access location
+    // Instead, the information returned by default will be:
+    // * SSID: “Wi-Fi” or “WLAN” (“WLAN" will be returned for the China SKU)
+    // * BSSID: "00:00:00:00:00:00" 
+    lock.lock();
+    sg_wifiinfo = wifiInfo;
+    xinfo2(TSF"get wifi info:%_", sg_wifiinfo.ssid);
+
+    return __WiFiInfoIsValid(wifiInfo);
 #endif
 }
 

@@ -30,15 +30,15 @@
 #define DEF_TASK_RETRY_INTERNAL (1 * 1000)
 
 // Heartbeart Range
-#define MinHeartInterval (4  * 60 * 1000 + 30 * 1000)   // 4.5 minute
-#define MaxHeartInterval (9 * 60 * 1000 + 50 * 1000)   // 9 minute 50 seconds
+#define MinHeartInterval (3  * 60 * 1000 + 30 * 1000)   // 3.5 minute
+#define MaxHeartInterval (10 * 60 * 1000)   // 10 minute
 
 // Heartbeat Step
 #define HeartStep (60 * 1000)      // try to increse current heartbeat by HeartStep
 #define SuccessStep  (20 * 1000)   // when finish compute choose successHeart-=SuccessStep as the stable heartbeat
 
-#define MaxHeartFailCount (3)
-#define BaseSuccCount (3)
+#define MaxHeartFailCount (2)
+#define BaseSuccCount (5)
 #define NetStableTestCount (3)     //We think it's time to test after NetStableCount times heartbeat using MinHeartInterval
 
 //signalling transmits timeout related constants
