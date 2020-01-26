@@ -232,7 +232,7 @@ void ShortLinkTaskManager::__RunOnStartTask() {
     std::list<TaskProfile>::iterator last = lst_cmd_.end();
 
     bool ismakesureauthsuccess = false;
-    std::set<std::string> has_makesureauth_host;
+    std::map<std::string, bool> has_makesureauth_host;
     uint64_t curtime = ::gettickcount();
     int sent_count = 0;
 
@@ -264,9 +264,11 @@ void ShortLinkTaskManager::__RunOnStartTask() {
         // make sure login
         if (first->task.need_authed) {
             if (has_makesureauth_host.find(host) == has_makesureauth_host.end()) {
-                ismakesureauthsuccess = MakesureAuthed(host);
-                has_makesureauth_host.insert(host);
+                has_makesureauth_host[host] = MakesureAuthed(host);
             }
+
+            ismakesureauthsuccess = has_makesureauth_host[host];
+            
             xinfo2(TSF"auth result %_ host %_", ismakesureauthsuccess, host);
 
             if (!ismakesureauthsuccess) {
@@ -303,9 +305,9 @@ void ShortLinkTaskManager::__RunOnStartTask() {
 
         first->use_proxy =  (first->remain_retry_count == 0 && first->task.retry_count > 0) ? !default_use_proxy_ : default_use_proxy_;
         ShortLinkInterface* worker = ShortLinkChannelFactory::Create(MessageQueue::Handler2Queue(asyncreg_.Get()), net_source_, first->task, first->use_proxy);
-        worker->OnSend.set(boost::bind(&ShortLinkTaskManager::__OnSend, this, _1), AYNC_HANDLER);
-        worker->OnRecv.set(boost::bind(&ShortLinkTaskManager::__OnRecv, this, _1, _2, _3), AYNC_HANDLER);
-        worker->OnResponse.set(boost::bind(&ShortLinkTaskManager::__OnResponse, this, _1, _2, _3, _4, _5, _6, _7), AYNC_HANDLER);
+        worker->OnSend.set(boost::bind(&ShortLinkTaskManager::__OnSend, this, _1), worker, AYNC_HANDLER);
+        worker->OnRecv.set(boost::bind(&ShortLinkTaskManager::__OnRecv, this, _1, _2, _3), worker, AYNC_HANDLER);
+        worker->OnResponse.set(boost::bind(&ShortLinkTaskManager::__OnResponse, this, _1, _2, _3, _4, _5, _6, _7), worker, AYNC_HANDLER);
         worker->GetCacheSocket = boost::bind(&ShortLinkTaskManager::__OnGetCacheSocket, this, _1);
         first->running_id = (intptr_t)worker;
 
@@ -491,13 +493,14 @@ void ShortLinkTaskManager::RedoTasks() {
 
 void ShortLinkTaskManager::RetryTasks(ErrCmdType _err_type, int _err_code, int _fail_handle, uint32_t _src_taskid) {
     xverbose_function();
+    xinfo2(TSF"RetryTasks taskid %_ ", _src_taskid);
     __BatchErrorRespHandle(_err_type, _err_code, _fail_handle, _src_taskid);
     __RunLoop(); 
 }
 
 void ShortLinkTaskManager::__BatchErrorRespHandle(ErrCmdType _err_type, int _err_code, int _fail_handle, uint32_t _src_taskid, bool _callback_runing_task_only) {
     xassert2(kEctOK != _err_type);
-    xdebug2(TSF"ect=%0, errcode=%1", _err_type, _err_code);
+    xdebug2(TSF"ect=%0, errcode=%1 taskid:=%2", _err_type, _err_code, _src_taskid);
 
     std::list<TaskProfile>::iterator first = lst_cmd_.begin();
     std::list<TaskProfile>::iterator last = lst_cmd_.end();
@@ -512,6 +515,19 @@ void ShortLinkTaskManager::__BatchErrorRespHandle(ErrCmdType _err_type, int _err
         }
         
         if (_fail_handle == kTaskFailHandleSessionTimeout && !first->task.need_authed) {
+            first = next;
+            continue;
+        }
+
+        xinfo2(TSF"axauth sessiontime id %_, cgi %_ taskid %_", _src_taskid, first->task.cgi, first->task.taskid);
+
+        if (_fail_handle == kTaskFailHandleSessionTimeout && _src_taskid != 0 && first->task.taskid == _src_taskid && first->allow_sessiontimeout_retry) { //retry task when sessiontimeout
+            xinfo2(TSF"axauth to timeout queue %_, cgi %_ ", first->task.taskid, first->task.cgi);
+            first->allow_sessiontimeout_retry = false;
+            first->remain_retry_count++;
+            __DeleteShortLink(first->running_id);
+            first->PushHistory();
+            first->InitSendParam();
             first = next;
             continue;
         }
