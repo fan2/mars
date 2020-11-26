@@ -77,7 +77,9 @@ class ComplexConnect {
     unsigned int IndexRtt() const { return index_conn_rtt_;}
     unsigned int IndexTotalCost() const { return index_conn_totalcost_;}
     unsigned int TotalCost() const { return totalcost_;}
-    bool IsInterrupted() const{ return is_interrupted_;};
+    bool IsInterrupted() const{ return is_interrupted_;}
+    bool IsConnectiveCheckFailed() const{   return is_connective_check_failed_; }
+    void SetNeedDetailLog(bool _need) {need_detail_log_ = _need;}
 
   private:
     int __ConnectTime(unsigned int _index) const;
@@ -101,7 +103,9 @@ class ComplexConnect {
     int index_conn_totalcost_;
     int totalcost_;
     bool is_interrupted_;
+    bool is_connective_check_failed_;
     EachIPConnectTimoutMode each_IP_timeout_mode_;
+    bool need_detail_log_;
 };
 
 #ifdef COMPLEX_CONNECT_NAMESPACE

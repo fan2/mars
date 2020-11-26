@@ -120,7 +120,7 @@ ShortLink::ShortLink(MessageQueue::MessageQueue_t _messagequeueid, NetSource& _n
     , tracker_(shortlink_tracker::Create())
     , is_keep_alive_(CheckKeepAlive(_task))
     {
-    xinfo2(TSF"%_, handler:(%_,%_)",XTHIS, asyncreg_.Get().queue, asyncreg_.Get().seq);
+    xinfo2(TSF"%_, handler:(%_,%_), long polling: %_ ",XTHIS, asyncreg_.Get().queue, asyncreg_.Get().seq, _task.long_polling);
     xassert2(breaker_.IsCreateSuc(), "Create Breaker Fail!!!");
 }
 
@@ -143,10 +143,10 @@ void ShortLink::__Run() {
     xinfo_function(TSF"%_, net:%_", message.String(), getNetInfo());
 
     ConnectProfile conn_profile;
-	getCurrNetLabel(conn_profile.net_type);
-	conn_profile.start_time = ::gettickcount();
-	conn_profile.tid = xlogger_tid();
-	__UpdateProfile(conn_profile);
+    getCurrNetLabel(conn_profile.net_type);
+    conn_profile.start_time = ::gettickcount();
+    conn_profile.tid = xlogger_tid();
+    __UpdateProfile(conn_profile);
 
     SOCKET fd_socket = __RunConnect(conn_profile);
 
@@ -292,12 +292,14 @@ SOCKET ShortLink::__RunConnect(ConnectProfile& _conn_profile) {
     ShortLinkConnectObserver connect_observer(*this);
 
     ComplexConnect::EachIPConnectTimoutMode timoutMode = ComplexConnect::EachIPConnectTimoutMode::MODE_FIXED;
-    if (__ContainIPv6(vecaddr)) {
+    bool contain_v6 = __ContainIPv6(vecaddr);
+    if (contain_v6) {
         timoutMode = ComplexConnect::EachIPConnectTimoutMode::MODE_INCREASE;
     } else {
-        xinfo2(TSF"address vector has no ipv6");
+        xinfo2_if(!task_.long_polling, TSF"address vector has no ipv6");
     }
 	ComplexConnect conn(kShortlinkConnTimeout, kShortlinkConnInterval, timoutMode);
+    conn.SetNeedDetailLog(!task_.long_polling);
     
     SOCKET sock = conn.ConnectImpatient(vecaddr, breaker_, &connect_observer, _conn_profile.proxy_info.type, proxy_addr, _conn_profile.proxy_info.username, _conn_profile.proxy_info.password);
     delete proxy_addr;
@@ -338,6 +340,11 @@ SOCKET ShortLink::__RunConnect(ConnectProfile& _conn_profile) {
     _conn_profile.conn_time = gettickcount();
     _conn_profile.local_ip = socket_address::getsockname(sock).ip();
     _conn_profile.local_port = socket_address::getsockname(sock).port();
+
+    if (contain_v6 && conn.Index() > 0) {
+        _conn_profile.ipv6_connect_failed = true;
+    }
+
     __UpdateProfile(_conn_profile);
 
     xinfo2(TSF"task socket connect success sock:%_, %_ host:%_, ip:%_, port:%_, local_ip:%_, local_port:%_, iptype:%_, net:%_", sock, message.String(), _conn_profile.host, _conn_profile.ip, _conn_profile.port, _conn_profile.local_ip, _conn_profile.local_port, IPSourceTypeString[_conn_profile.ip_type], _conn_profile.net_type);
@@ -356,7 +363,7 @@ bool ShortLink::__ContainIPv6(const std::vector<socket_address>& _vecaddr) {
     if (!_vecaddr.empty()) {
         in6_addr addr6 = IN6ADDR_ANY_INIT;
         if (socket_inet_pton(AF_INET6, _vecaddr[0].ip(), &addr6)) { //first ip is ipv6
-            xinfo2(TSF"ip %_ is v6", _vecaddr[0].ip());
+            xinfo2_if(!task_.long_polling, TSF"ip %_ is v6", _vecaddr[0].ip());
             return true;
         }
     }
@@ -553,7 +560,7 @@ void ShortLink::__RunReadWrite(SOCKET _socket, int& _err_type, int& _err_code, C
 	xgroup2() << group_close;
 }
 
-void ShortLink::__UpdateProfile(const ConnectProfile& _conn_profile) {
+void ShortLink::__UpdateProfile(const ConnectProfile _conn_profile) {
 	STATIC_RETURN_SYNC2ASYNC_FUNC(boost::bind(&ShortLink::__UpdateProfile, this, _conn_profile));
 	conn_profile_ = _conn_profile;
 }

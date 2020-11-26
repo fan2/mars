@@ -112,6 +112,7 @@ struct ConnectProfile {
         is_reused_fd = false;
         req_byte_count = 0;
         cgi.clear();
+        ipv6_connect_failed = false;
     }
     
     std::string net_type;
@@ -158,6 +159,7 @@ struct ConnectProfile {
     int local_net_stack;
     uint64_t req_byte_count;
     std::string cgi;
+    bool ipv6_connect_failed;
 };
 
         
@@ -186,7 +188,7 @@ struct TransferProfile {
         error_code = 0;
     }
     
-    const Task& task;
+    const Task task; //change "const Task& task" to "const Task task". fix a memory reuse bug.
     ConnectProfile connect_profile;
     
     uint64_t loop_start_task_time;  // ms
@@ -236,9 +238,12 @@ struct TaskProfile {
         trycount++;
         
         uint64_t task_timeout = (readwritetimeout + 5 * 1000) * trycount;
+        if (_task.long_polling) {
+            task_timeout = (_task.long_polling_timeout + 5 * 1000);
+        }
         
-        if (0 < _task.total_timetout &&  (uint64_t)_task.total_timetout < task_timeout)
-            task_timeout = _task.total_timetout;
+        if (0 < _task.total_timeout &&  (uint64_t)_task.total_timeout < task_timeout)
+            task_timeout = _task.total_timeout;
         
         return  task_timeout;
     }

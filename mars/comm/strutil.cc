@@ -28,6 +28,7 @@
 #include <locale>
 
 #include "comm/xlogger/xlogger.h"
+#include "mars/openssl/include/openssl/md5.h"
 
 #ifdef WIN32
 #define snprintf _snprintf
@@ -254,7 +255,11 @@ std::string Hex2Str(const char* _str, unsigned int _len) {
 }
 
 std::string Str2Hex(const char* _str, unsigned int _len) {
-    char outbuffer[256];
+    if (_len > 1024) {
+        xassert2(false, TSF"string length %_ too long.", _len);
+        return "";
+    }
+    char outbuffer[512];
     
     unsigned int outoffset = 0;
     const char * ptr = _str;

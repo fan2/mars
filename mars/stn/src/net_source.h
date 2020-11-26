@@ -94,7 +94,7 @@ class NetSource {
 
   public:
     // for long link
-    bool GetLongLinkItems(std::vector<IPPortItem>& _ipport_items, DnsUtil& _dns_util);
+    bool GetLongLinkItems(std::vector<IPPortItem>& _ipport_items, DnsUtil& _dns_util, const std::vector<std::string>& _host_list);
 
     // for short link
     bool GetShortLinkItems(const std::vector<std::string>& _hostlist, std::vector<IPPortItem>& _ipport_items, DnsUtil& _dns_util);
@@ -110,6 +110,9 @@ class NetSource {
 
     bool GetLongLinkSpeedTestIPs(std::vector<IPPortItem>& _ip_vec);
     void ReportLongLinkSpeedTestResult(std::vector<IPPortItem>& _ip_vec);
+
+    bool CanUseIPv6FromIpStrategy() {return ipportstrategy_.CanUseIPv6();}
+
 
   private:
     

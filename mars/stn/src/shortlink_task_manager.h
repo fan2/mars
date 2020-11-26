@@ -51,10 +51,12 @@ class ShortLinkTaskManager {
     boost::function<void (int _line, ErrCmdType _err_type, int _err_code, const std::string& _ip, const std::string& _host, uint16_t _port)> fun_notify_network_err_;
     boost::function<bool (const Task& _task, const void* _buffer, int _len)> fun_anti_avalanche_check_;
     boost::function<void (int _status_code)> fun_shortlink_response_;
-    boost::function<void (ErrCmdType _err_type, int _err_code, int _fail_handle, uint32_t _src_taskid)> fun_notify_retry_all_tasks;
+    boost::function<void (ErrCmdType _err_type, int _err_code, int _fail_handle, uint32_t _src_taskid, std::string _user_id)> fun_notify_retry_all_tasks;
 
-    static boost::function<void (std::vector<std::string>& _host_list)> get_real_host_;
+    static boost::function<void (const std::string& _user_id, std::vector<std::string>& _host_list)> get_real_host_;
     static boost::function<void (const int _error_type, const int _error_code, const int _use_ip_index)> task_connection_detail_;
+    static boost::function<int (TaskProfile& _profile)> choose_protocol_;
+    static boost::function<void (const TaskProfile& _profile)> on_timeout_or_remote_shutdown_;
 
   public:
     ShortLinkTaskManager(mars::stn::NetSource& _netsource, DynamicTimeout& _dynamictimeout, MessageQueue::MessageQueue_t _messagequeueid);
@@ -66,6 +68,7 @@ class ShortLinkTaskManager {
     void ClearTasks();
     void RedoTasks();
     void RetryTasks(ErrCmdType _err_type, int _err_code, int _fail_handle, uint32_t _src_taskid);
+    void SetDebugHost(const std::string& _host) {debug_host_ = _host;}
 
     unsigned int GetTasksContinuousFailCount();
 
@@ -96,6 +99,7 @@ class ShortLinkTaskManager {
     bool                            default_use_proxy_;
     unsigned int                    tasks_continuous_fail_count_;
     DynamicTimeout&                 dynamic_timeout_;
+    std::string                     debug_host_;
 #ifdef ANDROID
     WakeUpLock*                     wakeup_lock_;
 #endif
